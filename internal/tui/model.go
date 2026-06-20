@@ -124,6 +124,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForLogCmd(m.logSub)
 
 	case logLineMsg:
+		if msg.sub != m.logSub {
+			return m, nil // message from a superseded stream
+		}
 		m.logBuf.WriteString(msg.line)
 		m.logBuf.WriteByte('\n')
 		m.viewport.SetContent(m.logBuf.String())
@@ -131,12 +134,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForLogCmd(m.logSub)
 
 	case logsClosedMsg:
+		if msg.sub != m.logSub {
+			return m, nil // message from a superseded stream
+		}
 		if msg.err != nil {
 			m.statusMsg = errorStyle.Render("logs: " + firstLine(msg.err.Error()))
 		}
 		m.stopLogs()
 		m.state = stateList
 		m.layout()
+		return m, nil
+
+	case logsFailedMsg:
+		if msg.err != nil {
+			m.statusMsg = errorStyle.Render("logs: " + firstLine(msg.err.Error()))
+		}
 		return m, nil
 
 	case errMsg:
@@ -190,13 +202,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case key.Matches(msg, keys.Up):
-			return m, m.dispatch("up", "Starting")
+			cmd := m.dispatch("up", "Starting")
+			return m, cmd
 		case key.Matches(msg, keys.Down):
-			return m, m.dispatch("down", "Stopping")
+			cmd := m.dispatch("down", "Stopping")
+			return m, cmd
 		case key.Matches(msg, keys.Restart):
-			return m, m.dispatch("restart", "Restarting")
+			cmd := m.dispatch("restart", "Restarting")
+			return m, cmd
 		case key.Matches(msg, keys.Pull):
-			return m, m.dispatch("pull", "Updating")
+			cmd := m.dispatch("pull", "Updating")
+			return m, cmd
 		}
 	}
 

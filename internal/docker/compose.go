@@ -92,6 +92,16 @@ func StreamLogs(ctx context.Context, dir string, ch chan<- string) error {
 				return
 			}
 		}
+		// A scan error (read failure, or a line over the 1MB cap) otherwise
+		// ends the stream silently; surface it as a final line so the user
+		// sees why logs stopped. Suppress it on a cancelled context, where the
+		// read is expected to fail.
+		if err := scanner.Err(); err != nil && ctx.Err() == nil {
+			select {
+			case ch <- fmt.Sprintf("[stream error: %s]", err):
+			case <-ctx.Done():
+			}
+		}
 		_ = cmd.Wait()
 	}()
 

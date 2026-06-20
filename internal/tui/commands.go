@@ -85,20 +85,21 @@ func startLogsCmd(s stacks.Stack) tea.Cmd {
 		ch := make(chan string, 256)
 		if err := docker.StreamLogs(ctx, s.Dir, ch); err != nil {
 			cancel()
-			return logsClosedMsg{err}
+			return logsFailedMsg{err}
 		}
 		return logsStartedMsg{stack: s.Name, sub: ch, cancel: cancel}
 	}
 }
 
 // waitForLogCmd reads one line from the channel and reschedules itself, turning
-// a streaming channel into a sequence of Bubble Tea messages.
+// a streaming channel into a sequence of Bubble Tea messages. Each message
+// carries ch so the model can discard messages from a superseded stream.
 func waitForLogCmd(ch chan string) tea.Cmd {
 	return func() tea.Msg {
 		line, ok := <-ch
 		if !ok {
-			return logsClosedMsg{}
+			return logsClosedMsg{sub: ch}
 		}
-		return logLineMsg{line}
+		return logLineMsg{sub: ch, line: line}
 	}
 }

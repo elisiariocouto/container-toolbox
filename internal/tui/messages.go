@@ -58,8 +58,21 @@ type logsStartedMsg struct {
 	cancel context.CancelFunc
 }
 
-type logLineMsg struct{ line string }
+// logLineMsg and logsClosedMsg carry the channel they originated from so the
+// model can ignore messages from a stream that has already been superseded
+// (e.g. the user exited logs and started a different stack's stream).
+type logLineMsg struct {
+	sub  chan string
+	line string
+}
 
-type logsClosedMsg struct{ err error }
+type logsClosedMsg struct {
+	sub chan string
+	err error
+}
+
+// logsFailedMsg reports that a log stream could not be started at all (so no
+// channel was ever installed on the model).
+type logsFailedMsg struct{ err error }
 
 type errMsg struct{ err error }
