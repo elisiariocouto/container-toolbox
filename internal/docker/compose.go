@@ -1,0 +1,95 @@
+package docker
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// ComposeAvailable reports whether the `docker` binary and the `docker compose`
+// v2 subcommand are usable. The returned error explains what is missing.
+func ComposeAvailable() error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return fmt.Errorf("`docker` not found in PATH")
+	}
+	if out, err := exec.Command("docker", "compose", "version").CombinedOutput(); err != nil {
+		return fmt.Errorf("`docker compose` (v2) unavailable: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// composeCmd builds a `docker compose <args...>` command rooted in dir, so
+// Compose auto-detects the compose file and derives the project name the same
+// way the SDK labels report it.
+func composeCmd(ctx context.Context, dir string, args ...string) *exec.Cmd {
+	full := append([]string{"compose"}, args...)
+	cmd := exec.CommandContext(ctx, "docker", full...)
+	cmd.Dir = dir
+	return cmd
+}
+
+// run executes a compose subcommand and returns combined stdout+stderr. On
+// failure the output is wrapped into the error so callers can surface why.
+func run(ctx context.Context, dir string, args ...string) error {
+	out, err := composeCmd(ctx, dir, args...).CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			return err
+		}
+		return fmt.Errorf("%s", msg)
+	}
+	return nil
+}
+
+// Up runs `docker compose up -d`.
+func Up(ctx context.Context, dir string) error { return run(ctx, dir, "up", "-d") }
+
+// Down runs `docker compose down`.
+func Down(ctx context.Context, dir string) error { return run(ctx, dir, "down") }
+
+// Restart runs `docker compose restart`.
+func Restart(ctx context.Context, dir string) error { return run(ctx, dir, "restart") }
+
+// PullUp pulls newer images and recreates the stack: `pull` then `up -d`.
+func PullUp(ctx context.Context, dir string) error {
+	if err := run(ctx, dir, "pull"); err != nil {
+		return err
+	}
+	return run(ctx, dir, "up", "-d")
+}
+
+// StreamLogs starts `docker compose logs -f --tail=200` and pushes each output
+// line into ch. ch is closed when the stream ends (EOF or context cancel).
+// Cancel the context (via the returned process lifecycle) to stop streaming.
+func StreamLogs(ctx context.Context, dir string, ch chan<- string) error {
+	cmd := composeCmd(ctx, dir, "logs", "-f", "--tail=200", "--no-color")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stderr = cmd.Stdout // StdoutPipe set cmd.Stdout to the pipe; fold stderr into it too
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	go func() {
+		defer close(ch)
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			select {
+			case ch <- scanner.Text():
+			case <-ctx.Done():
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+				return
+			}
+		}
+		_ = cmd.Wait()
+	}()
+
+	return nil
+}
