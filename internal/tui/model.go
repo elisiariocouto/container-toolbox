@@ -45,7 +45,7 @@ type Model struct {
 	// log streaming
 	logSub    chan string
 	logCancel context.CancelFunc
-	logBuf    strings.Builder
+	logBuf    *strings.Builder
 	logStack  string
 
 	width, height int
@@ -74,6 +74,7 @@ func New(stacksDir string, dc *docker.Client) Model {
 		spinner:   sp,
 		help:      help.New(),
 		daemonOK:  true,
+		logBuf:    &strings.Builder{},
 	}
 }
 
