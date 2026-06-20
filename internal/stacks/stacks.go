@@ -34,6 +34,12 @@ type Stack struct {
 // A missing root is not an error: it returns an empty slice so the UI can show
 // a friendly empty state. Real I/O errors (e.g. permission denied) are returned.
 func Discover(root string) ([]Stack, error) {
+	// Resolve to an absolute path so derived Stack.Dir values can match the
+	// (typically absolute) com.docker.compose.project.working_dir label.
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
+
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -15,7 +15,11 @@ func ComposeAvailable() error {
 		return fmt.Errorf("`docker` not found in PATH")
 	}
 	if out, err := exec.Command("docker", "compose", "version").CombinedOutput(); err != nil {
-		return fmt.Errorf("`docker compose` (v2) unavailable: %s", strings.TrimSpace(string(out)))
+		reason := strings.TrimSpace(string(out))
+		if reason == "" {
+			reason = err.Error()
+		}
+		return fmt.Errorf("`docker compose` (v2) unavailable: %s", reason)
 	}
 	return nil
 }
@@ -63,7 +67,7 @@ func PullUp(ctx context.Context, dir string) error {
 
 // StreamLogs starts `docker compose logs -f --tail=200` and pushes each output
 // line into ch. ch is closed when the stream ends (EOF or context cancel).
-// Cancel the context (via the returned process lifecycle) to stop streaming.
+// Cancel the context passed in to stop streaming and kill the process.
 func StreamLogs(ctx context.Context, dir string, ch chan<- string) error {
 	cmd := composeCmd(ctx, dir, "logs", "-f", "--tail=200", "--no-color")
 	stdout, err := cmd.StdoutPipe()

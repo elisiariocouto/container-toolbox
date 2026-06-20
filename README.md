@@ -26,7 +26,7 @@ It is a hybrid client:
 
 ## Requirements
 
-- Go 1.24+ (to build)
+- Go 1.25+ (to build)
 - Docker Engine with the `docker compose` (v2) CLI plugin
 - Access to the local Docker socket
 

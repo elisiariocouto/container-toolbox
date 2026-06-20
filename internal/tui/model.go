@@ -133,7 +133,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.statusMsg = errorStyle.Render("logs: " + firstLine(msg.err.Error()))
 		}
-		m.logSub = nil
+		m.stopLogs()
+		m.state = stateList
+		m.layout()
 		return m, nil
 
 	case errMsg:
@@ -258,7 +260,11 @@ func (m Model) footer() string {
 	}
 
 	if !m.daemonOK {
-		lines = append(lines, errorStyle.Render("Docker daemon unreachable — is it running?"))
+		msg := "Docker daemon unreachable — is it running?"
+		if m.daemonErr != nil {
+			msg = "Docker daemon: " + firstLine(m.daemonErr.Error())
+		}
+		lines = append(lines, errorStyle.Render(msg))
 	}
 	if m.err != nil {
 		lines = append(lines, errorStyle.Render(firstLine(m.err.Error())))
@@ -270,7 +276,7 @@ func (m Model) footer() string {
 
 func (m Model) logsView() string {
 	title := logsTitleStyle.Render("logs: " + m.logStack)
-	help := statusBarStyle.Render("esc back · ↑/↓ scroll · q quit")
+	help := statusBarStyle.Render("esc/q back · ↑/↓ scroll · ctrl+c quit")
 	return lipgloss.JoinVertical(lipgloss.Left, title, viewportStyle.Render(m.viewport.View()), help)
 }
 
